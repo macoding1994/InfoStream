@@ -1,3 +1,4 @@
+import socket
 import time
 from datetime import datetime
 import jieba.analyse
@@ -90,58 +91,72 @@ def tag_unprocessed_feeds():
 
 # =======================================================================================================================
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if request.method == 'GET':
-        return render_template('index.html')
-    return redirect(url_for('index'))
+@app.route('/api/feeds_with_keywords', methods=['GET'])
+def get_feeds_with_keywords():
+    db = DatabaseManager()
 
+    # 获取分页参数
+    try:
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 10))
+        if page < 1 or page_size < 1:
+            raise ValueError()
+    except ValueError:
+        return jsonify({"error": "Invalid pagination parameters"}), 400
 
-@app.route('/longtask', methods=['POST'])
-def longtask():
-    task = tag_unprocessed_feeds.apply_async()
-    return jsonify({}), 202, {'Location': url_for('taskstatus',
-                                                  task_id=task.id)}
+    offset = (page - 1) * page_size
 
+    # 正确分页 feeds（只查主表）
+    feed_query = """
+        SELECT id, url, title, description, is_tagged
+        FROM feeds
+        ORDER BY id DESC
+        LIMIT %s OFFSET %s
+    """
+    feeds = db.execute_query(feed_query, (page_size, offset), fetch=True)
 
-@app.route('/tagfeeds', methods=['POST'])
-def start_tagging_task():
-    task = tag_unprocessed_feeds.apply_async()
-    return jsonify({}), 202, {'Location': url_for('taskstatus', task_id=task.id)}
+    if not feeds:
+        return jsonify({
+            'server_ip': socket.gethostbyname(socket.gethostname()),
+            'page': page,
+            'page_size': page_size,
+            'total': 0,
+            'feeds': []
+        })
 
+    # 收集所有 feed_id 进行关键词查表
+    feed_ids = [feed['id'] for feed in feeds]
+    keyword_query = """
+        SELECT feed_id, keyword FROM keyword WHERE feed_id IN %s
+    """
+    keyword_rows = db.execute_query(keyword_query, (feed_ids,), fetch=True)
 
-@app.route('/status/<task_id>')
-def taskstatus(task_id):
-    task = get_feed_info.AsyncResult(task_id)
-    if task.state == 'PENDING':
-        response = {
-            'state': task.state,
-            'current': 0,
-            'total': 1,
-            'status': 'Pending...'
-        }
-    elif task.state != 'FAILURE':
-        response = {
-            'state': task.state,
-            'current': task.info.get('current', 0),
-            'total': task.info.get('total', 1),
-            'status': task.info.get('status', '')
-        }
-        if 'result' in task.info:
-            response['result'] = task.info['result']
-    else:
-        # something went wrong in the background job
-        response = {
-            'state': task.state,
-            'current': 1,
-            'total': 1,
-            'status': str(task.info),  # this is the exception raised
-        }
-    return jsonify(response)
+    # 构建关键词映射
+    keyword_map = {}
+    for row in keyword_rows:
+        keyword_map.setdefault(row['feed_id'], []).append(row['keyword'])
+
+    # 把 keyword 附加回 feed 数据
+    for feed in feeds:
+        feed['is_tagged'] = bool(feed['is_tagged'])
+        feed['keywords'] = keyword_map.get(feed['id'], [])
+
+    # 总数量
+    total = db.execute_query("SELECT COUNT(*) AS total FROM feeds", fetch=True)[0]['total']
+
+    return jsonify({
+        'server_ip': socket.gethostbyname(socket.gethostname()),
+        'page': page,
+        'page_size': page_size,
+        'total': total,
+        'feeds': feeds
+    })
 
 
 if __name__ == '__main__':
+    app.run(debug=True, host="0.0.0.0")
+
     # task = get_feed_info.apply_async()
     # print(task.id)  # 可用于查看状态
-    task = tag_unprocessed_feeds.apply_async()
-    print(task.id)  # 可用于查看状态
+    # task = tag_unprocessed_feeds.apply_async()
+    # print(task.id)  # 可用于查看状态
