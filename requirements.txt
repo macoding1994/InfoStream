@@ -1,0 +1,8 @@
+flask
+celery
+redis
+pymysql
+feedparser
+jieba
+loguru
+requests

@@ -6,16 +6,20 @@ from loguru import logger
 import feedparser
 from flask import Flask, request, render_template, redirect, url_for, jsonify
 from celery import Celery
-from db_manager import DatabaseManager
+from db_manager import DatabaseManager, initialize_database
 from tool import get_feed_entry, insert_feed, insert_keyword, get_keywords_from_deepseek
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'top-secret!'
 
 # Celery configuration
-app.config['CELERY_BROKER_URL'] = 'redis://:5bAlEv0xt4tV@192.168.133.132:16379/3'
-app.config['CELERY_RESULT_BACKEND'] = 'redis://:5bAlEv0xt4tV@192.168.133.132:16379/3'
+app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/0'
 app.config['CELERY_INCLUDE'] = []
+app.config['CELERY_ROUTES'] = {
+    'get_feed_info': {'queue': 'fetcher'},
+    'tag_unprocessed_feeds': {'queue': 'tagger'}
+}
 
 # Initialize Celery
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
@@ -26,9 +30,11 @@ FEED_DICT = {
 }
 
 
-@celery.task(bind=True)
-def get_feed_info(self):
+@celery.task(name='get_feed_info')
+def get_feed_info(feed_dict=None):
     all_entries = []
+    if isinstance(feed_dict, dict):
+        FEED_DICT.update(feed_dict)
 
     for feed_url, fclass in FEED_DICT.items():
         for entry in get_feed_entry(feed_url):
@@ -152,11 +158,28 @@ def get_feeds_with_keywords():
         'feeds': feeds
     })
 
+@app.route('/trigger_fetch', methods=['POST'])
+def trigger_fetch():
+    get_feed_info.apply_async()
+    return 'Fetch task triggered', 200
+
+@app.route('/trigger_tag', methods=['POST'])
+def trigger_tag():
+    tag_unprocessed_feeds.apply_async()
+    return 'Tag task triggered', 200
+
 
 if __name__ == '__main__':
+    initialize_database()
     app.run(debug=True, host="0.0.0.0")
 
     # task = get_feed_info.apply_async()
+    # get_feed_info.apply_async(kwargs={
+    #     "feed_dict": {
+    #         "https://ciechanow.ski/atom.xml": "technology",
+    #         "https://tatianamac.com/feed/feed.xml": "technology"
+    #     }
+    # })
     # print(task.id)  # 可用于查看状态
     # task = tag_unprocessed_feeds.apply_async()
     # print(task.id)  # 可用于查看状态

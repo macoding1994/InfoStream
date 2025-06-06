@@ -1,0 +1,2 @@
+*/30 * * * * curl -X POST http://localhost:5000/trigger_fetch
+*/50 * * * * curl -X POST http://localhost:5000/trigger_tag

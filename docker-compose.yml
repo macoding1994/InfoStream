@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # Flask Web 应用
+  web:
+    build: .
+    container_name: flask_web
+    command: bash /app/start.sh
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+    volumes:
+      - ./crontab:/app/crontab
+      - ./start.sh:/app/start.sh
+    depends_on:
+      - redis
+      - mysql
+
+  # Celery Worker - fetcher 队列
+  worker_fetcher:
+    build: .
+    container_name: celery_fetcher
+    command: celery -A app.celery worker -Q fetcher --loglevel=info
+    depends_on:
+      - redis
+      - mysql
+
+  # Celery Worker - tagger 队列
+  worker_tagger:
+    build: .
+    container_name: celery_tagger
+    command: celery -A app.celery worker -Q tagger --loglevel=info
+    depends_on:
+      - redis
+      - mysql
+
+  # Redis 作为 Celery 消息队列
+  redis:
+    image: redis:6
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  # MySQL 5.7 数据库
+  mysql:
+    image: mysql:5.7
+    container_name: mysql57
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: infostream_db
+      MYSQL_USER: infostream_user
+      MYSQL_PASSWORD: infostream_pass
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  mysql_data:
