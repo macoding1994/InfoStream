@@ -15,7 +15,7 @@ def get_feed_entry(feed_url):
     for entry_index, entry in enumerate(feed.entries, start=1):
         url = entry.get('url', '') or entry.get('link', '')
         title = entry.get('title', '')
-        description = entry.get('description', '')
+        description = entry.get('description', '') or entry.get('summary', '')
         logger.debug(url)
         logger.debug(title)
         # logger.debug(description)
@@ -58,6 +58,7 @@ def insert_feed(url, title, description):
     """
     params = (url, title, description, datetime.now())
     try:
+        logger.info(f"{query} \n{params}")
         feed_id = db.execute_query(query, params, return_last_id=True)
         return feed_id
     except Exception as e:
@@ -84,6 +85,13 @@ def insert_keyword(feed_id, keyword):
 
 if __name__ == '__main__':
     feed_url = "feed://eugene-wei.squarespace.com/blog?format=rss"
-    get_feed_entry(feed_url)
+    FEED_DICT = {
+        # "feed://eugene-wei.squarespace.com/blog?format=rss": "technology/blog",
+        # "https://ciechanow.ski/atom.xml": "technology",
+        # "https://tatianamac.com/feed/feed.xml": "technology",
+        "https://interfacelovers.com/feed": "design ",
+    }
+    for k,v in FEED_DICT.items():
+        print(len(get_feed_entry(feed_url)))
 
     # print(get_keywords_from_deepseek("https://www.eugenewei.com/blog/2023/7/6/how-to-blow-up-a-timeline"))

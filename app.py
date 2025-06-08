@@ -1,3 +1,4 @@
+import os
 import socket
 import time
 from datetime import datetime
@@ -13,8 +14,8 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'top-secret!'
 
 # Celery configuration
-app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
-app.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/0'
+app.config['CELERY_BROKER_URL'] = os.getenv('REDIS_URL')
+app.config['CELERY_RESULT_BACKEND'] = os.getenv('REDIS_URL')
 app.config['CELERY_INCLUDE'] = []
 app.config['CELERY_ROUTES'] = {
     'get_feed_info': {'queue': 'fetcher'},
@@ -27,6 +28,9 @@ celery.conf.update(app.config)
 
 FEED_DICT = {
     "feed://eugene-wei.squarespace.com/blog?format=rss": "technology/blog",
+    "https://ciechanow.ski/atom.xml": "technology",
+    "https://tatianamac.com/feed/feed.xml": "technology",
+    "https://interfacelovers.com/feed": "design ",
 }
 
 
@@ -158,10 +162,12 @@ def get_feeds_with_keywords():
         'feeds': feeds
     })
 
+
 @app.route('/trigger_fetch', methods=['POST'])
 def trigger_fetch():
     get_feed_info.apply_async()
     return 'Fetch task triggered', 200
+
 
 @app.route('/trigger_tag', methods=['POST'])
 def trigger_tag():
