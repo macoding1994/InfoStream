@@ -7,4 +7,4 @@ cron &
 
 # 启动 Flask app
 echo "Starting Flask app..."
-sleep 60 && python3 app.py
+sleep 15 && python3 app.py

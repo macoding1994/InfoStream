@@ -103,12 +103,14 @@ def tag_unprocessed_feeds():
 
 @app.route('/api/feeds_with_keywords', methods=['GET'])
 def get_feeds_with_keywords():
-    db = DatabaseManager()
+    db = DatabaseManager(use_slave=True)
 
     # 获取分页参数
     try:
         page = int(request.args.get('page', 1))
         page_size = int(request.args.get('page_size', 10))
+        # page = 1
+        # page_size = 10
         if page < 1 or page_size < 1:
             raise ValueError()
     except ValueError:
@@ -176,6 +178,7 @@ def trigger_tag():
 
 
 if __name__ == '__main__':
+    # get_feeds_with_keywords()
     initialize_database()
     app.run(debug=True, host="0.0.0.0")
 

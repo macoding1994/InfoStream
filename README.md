@@ -7,18 +7,33 @@
 ### 部署过程命令
 
 ```shell
-sed -i 's/\r//' start.sh crontab
+sed -i 's/\r//' start.sh crontab setup_mysql_replication.sh
 
 docker-compose -f docker-compose.nginx.yml up -d
 docker-compose -f docker-compose.redis-mysql.yml up -d
+sh setup_mysql_replication.sh
+
 docker-compose -f docker-compose.web.yml build && docker-compose -f docker-compose.web.yml up -d
 docker-compose -f docker-compose.fetcher.yml build && docker-compose -f docker-compose.fetcher.yml up -d
 docker-compose -f docker-compose.tagger.yml build && docker-compose -f docker-compose.tagger.yml up -d
 
+docker-compose -f docker-compose.web.yml down -v
 docker-compose -f docker-compose.redis-mysql.yml down -v
+docker-compose -f docker-compose.nginx.yml down -v
+docker-compose -f docker-compose.fetcher.yml down -v
+docker-compose -f docker-compose.tagger.yml down -v
 
 
 ```
+
+
+
+#### MYSQL主从配置
+
+```
+```
+
+
 
 
 

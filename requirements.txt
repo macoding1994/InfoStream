@@ -6,3 +6,4 @@ feedparser
 jieba
 loguru
 requests
+python-dotenv

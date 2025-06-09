@@ -1,25 +1,58 @@
-version: '3.8'
+version: '3.9'
 
 services:
+
   redis:
     image: redis:6
     container_name: redis
     ports:
       - "6379:6379"
 
-  mysql:
+  mysql-master:
     image: mysql:5.7
-    container_name: mysql57
+    container_name: mysql-master
     restart: unless-stopped
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-infostream_pass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-infostream_db}
+      MYSQL_USER: ${MYSQL_USER:-infostream_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-infostream_pass}
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_master_data:/var/lib/mysql
+      - ./master/my.cnf:/etc/mysql/my.cnf
+    networks:
+      mysql_net:
+        ipv4_address: 172.20.0.10
+
+  mysql-slave:
+    image: mysql:5.7
+    container_name: mysql-slave
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_SLAVE_PASSWORD:-infostream_pass}
+      MYSQL_DATABASE: ${MYSQL_SLAVE_DATABASE:-infostream_db}
+      MYSQL_USER: ${MYSQL_SLAVE_USER:-infostream_user}
+      MYSQL_PASSWORD: ${MYSQL_SLAVE_PASSWORD:-infostream_pass}
+    volumes:
+      - mysql_slave_data:/var/lib/mysql
+      - ./slave/my.cnf:/etc/mysql/my.cnf
+    depends_on:
+      - mysql-master
+    networks:
+      mysql_net:
+        ipv4_address: 172.20.0.11
 
 volumes:
-  mysql_data:
+  mysql_master_data:
+  mysql_slave_data:
+
+networks:
+  mysql_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

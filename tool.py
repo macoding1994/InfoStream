@@ -51,7 +51,7 @@ def get_keywords_from_deepseek(text):
 
 
 def insert_feed(url, title, description):
-    db = DatabaseManager()
+    db = DatabaseManager(use_slave=False)
     query = """
         INSERT INTO feeds (url, title, description, last_fetched_at)
         VALUES (%s, %s, %s, %s)
@@ -59,7 +59,7 @@ def insert_feed(url, title, description):
     params = (url, title, description, datetime.now())
     try:
         logger.info(f"{query} \n{params}")
-        feed_id = db.execute_query(query, params, return_last_id=True)
+        feed_id = db.execute_query(query, params, return_lastrowid=True)
         return feed_id
     except Exception as e:
         logger.exception(e)
@@ -68,7 +68,7 @@ def insert_feed(url, title, description):
 
 
 def insert_keyword(feed_id, keyword):
-    db = DatabaseManager()
+    db = DatabaseManager(use_slave=False)
     query = """
             INSERT INTO keyword (feed_id, keyword, created_at, updated_at)
             VALUES (%s, %s, %s, %s)
