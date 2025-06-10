@@ -177,6 +177,16 @@ def trigger_tag():
     return 'Tag task triggered', 200
 
 
+@app.route('/test_backend', methods=['GET'])
+def test_backend():
+    import socket
+    from flask import request
+    return jsonify({
+        "backend_ip": socket.gethostbyname(socket.gethostname()),
+        "backend_port": request.host
+    })
+
+
 if __name__ == '__main__':
     # get_feeds_with_keywords()
     initialize_database()

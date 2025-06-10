@@ -1,12 +1,36 @@
 version: '3.8'
 
 services:
-  web:
+  web1:
     build: .
-    container_name: flask_web
+    container_name: flask_web_5000
     command: bash /app/start.sh
     ports:
       - "5000:5000"
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_SLAVE_HOST=${MYSQL_SLAVE_HOST}         # 新加
+      - MYSQL_SLAVE_PORT=${MYSQL_SLAVE_PORT}         # 新加
+      - MYSQL_SLAVE_USER=${MYSQL_SLAVE_USER}         # 新加
+      - MYSQL_SLAVE_PASSWORD=${MYSQL_SLAVE_PASSWORD} # 新加
+      - MYSQL_SLAVE_DATABASE=${MYSQL_SLAVE_DATABASE} # 新加
+      - FLASK_APP=${FLASK_APP}
+      - FLASK_ENV=${FLASK_ENV}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    volumes:
+      - ./crontab:/app/crontab
+      - ./start.sh:/app/start.sh
+  web2:
+    build: .
+    container_name: flask_web_5001
+    command: bash /app/start.sh
+    ports:
+      - "5001:5000"   # 注意！映射容器内部5000 → 外部5001
     environment:
       - REDIS_URL=${REDIS_URL}
       - MYSQL_HOST=${MYSQL_HOST}
