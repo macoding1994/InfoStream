@@ -5,13 +5,14 @@ services:
   redis:
     image: redis:6
     container_name: redis
+    restart: always
     ports:
       - "6379:6379"
 
   mysql-master:
     image: mysql:5.7
     container_name: mysql-master
-    restart: unless-stopped
+    restart: always
     ports:
       - "3306:3306"
     environment:
@@ -29,7 +30,7 @@ services:
   mysql-slave:
     image: mysql:5.7
     container_name: mysql-slave
-    restart: unless-stopped
+    restart: always
     ports:
       - "3307:3306"
     environment:

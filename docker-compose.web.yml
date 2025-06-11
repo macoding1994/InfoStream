@@ -3,6 +3,7 @@ version: '3.8'
 services:
   web1:
     build: .
+    restart: always
     container_name: flask_web_5000
     command: bash /app/start.sh
     ports:
@@ -27,6 +28,7 @@ services:
       - ./start.sh:/app/start.sh
   web2:
     build: .
+    restart: always
     container_name: flask_web_5001
     command: bash /app/start.sh
     ports:

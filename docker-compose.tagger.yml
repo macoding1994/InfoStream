@@ -5,6 +5,7 @@ services:
     build: .
     container_name: celery_tagger
     command: celery -A app.celery worker -Q tagger --loglevel=info
+    restart: always
     environment:
       - REDIS_URL=${REDIS_URL}
       - MYSQL_HOST=${MYSQL_HOST}
