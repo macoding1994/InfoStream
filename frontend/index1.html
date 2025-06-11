@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>InfoStream Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 2rem;
+            background: linear-gradient(270deg, #6a11cb, #2575fc, #6a11cb);
+            background-size: 600% 600%;
+            animation: gradientBG 15s ease infinite;
+            min-height: 100vh;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        @keyframes gradientBG {
+            0% {background-position: 0% 50%;}
+            50% {background-position: 100% 50%;}
+            100% {background-position: 0% 50%;}
+        }
+
+        h1 {
+            margin-bottom: 1.5rem;
+            color: #fff;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .btn {
+            margin-right: 1rem;
+        }
+
+        .table-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.37);
+            color: #000;
+        }
+
+        table {
+            margin-top: 1rem;
+            table-layout: fixed;
+            width: 100%;
+            background-color: #fff;
+            color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        th, td {
+            word-wrap: break-word;
+            word-break: break-word;
+            vertical-align: top;
+            padding: 0.75rem;
+            line-height: 1.5em;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: #212529;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        td.id {
+            text-align: center;
+            width: 50px;
+        }
+
+        td.url {
+            max-width: 300px;
+        }
+
+        td.title {
+            max-width: 200px;
+        }
+
+        td.description {
+            max-width: 400px;
+            cursor: pointer;
+        }
+
+        td.description .desc-content {
+            max-height: 4.5em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            white-space: normal;
+        }
+
+        td.is_tagged {
+            text-align: center;
+            width: 80px;
+        }
+
+        td.keywords {
+            max-width: 300px;
+        }
+
+        .summary-text {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            th, td {
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>InfoStream Dashboard</h1>
+
+    <div class="mb-4 d-flex justify-content-center">
+        <button class="btn btn-primary" onclick="triggerFetch()">Trigger Fetch</button>
+        <button class="btn btn-success" onclick="triggerTag()">Trigger Tag</button>
+    </div>
+
+    <div id="summary" class="summary-text"></div>
+
+    <div class="table-container mx-auto" style="max-width: 95%;">
+        <h2 class="text-center mb-3">Feeds with Keywords</h2>
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th style="width:50px;">ID</th>
+                        <th style="width:300px;">URL</th>
+                        <th style="width:200px;">Title</th>
+                        <th style="width:400px;">Description</th>
+                        <th style="width:80px;">is_tagged</th>
+                        <th>Keywords</th>
+                    </tr>
+                </thead>
+                <tbody id="feedsTableBody"></tbody>
+            </table>
+        </div>
+
+        <!-- 翻页控件 -->
+        <div class="mt-4 d-flex justify-content-center align-items-center">
+            <button class="btn btn-secondary me-2" id="prevPage" onclick="prevPage()">Previous</button>
+            <span id="currentPage" class="me-2">Page 1</span>
+            <button class="btn btn-secondary" id="nextPage" onclick="nextPage()">Next</button>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let pageSize = 10;
+        let totalPages = 1;
+
+        async function loadFeeds(page = 1) {
+            currentPage = page;
+            try {
+                const response = await fetch(`/api/feeds_with_keywords?page=${page}&page_size=${pageSize}`);
+                const data = await response.json();
+
+                totalPages = Math.ceil(data.total / data.page_size);
+
+                const tbody = document.getElementById('feedsTableBody');
+                tbody.innerHTML = '';
+
+                const summary = document.getElementById('summary');
+                summary.innerHTML = `Total Feeds: <strong>${data.total}</strong> | Page: <strong>${data.page}</strong> / Size: <strong>${data.page_size}</strong> | Server IP: <strong>${data.server_ip}</strong>`;
+
+                data.feeds.forEach(feed => {
+                    const row = `
+                        <tr>
+                            <td class="id">${feed.id}</td>
+                            <td class="url"><a href="${feed.url}" target="_blank">${feed.url}</a></td>
+                            <td class="title">${feed.title}</td>
+                            <td class="description" title="${escapeHtml(feed.description)}">
+                                <div class="desc-content">${feed.description}</div>
+                            </td>
+                            <td class="is_tagged">${feed.is_tagged ? '✅' : '❌'}</td>
+                            <td class="keywords">${feed.keywords.join(', ')}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+
+                updatePaginationControls();
+            } catch (err) {
+                console.error('Error loading feeds:', err);
+            }
+        }
+
+        function updatePaginationControls() {
+            document.getElementById('currentPage').innerText = `Page ${currentPage} / ${totalPages}`;
+            document.getElementById('prevPage').disabled = currentPage === 1;
+            document.getElementById('nextPage').disabled = currentPage >= totalPages;
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                loadFeeds(currentPage - 1);
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                loadFeeds(currentPage + 1);
+            }
+        }
+
+        async function triggerFetch() {
+            try {
+                await fetch('/trigger_fetch', { method: 'POST' });
+                alert('Fetch triggered');
+                loadFeeds();
+            } catch (err) {
+                alert('Error triggering fetch');
+            }
+        }
+
+        async function triggerTag() {
+            try {
+                await fetch('/trigger_tag', { method: 'POST' });
+                alert('Tag triggered');
+                loadFeeds();
+            } catch (err) {
+                alert('Error triggering tag');
+            }
+        }
+
+        // 防止 HTML 注入
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // 初始化加载
+        loadFeeds();
+    </script>
+
+</body>
+</html>

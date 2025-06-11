@@ -1,8 +1,17 @@
 # InfoStream
 
-**The Scenario:** "InfoStream," a content aggregation startup, wants to build a platform that fetches news articles from various (mock) external RSS feeds, processes them (e.g., basic keyword tagging – can be simulated), and displays them to users via a simple web interface. They want to build this using a microservices architecture.
+### Feed-Fetcher Service
 
+### Processing Service
 
+### API Service
+
+| API Endpoint               | Method | Purpose                                                      |
+| -------------------------- | ------ | ------------------------------------------------------------ |
+| `/api/feeds_with_keywords` | GET    | Retrieve list of feed articles with keywords, with pagination |
+| `/trigger_fetch`           | POST   | Trigger background task to fetch RSS feed articles and store them in the database |
+| `/trigger_tag`             | POST   | Trigger background task to extract keywords for untagged feeds and store them |
+| `/test_backend`            | GET    | Test whether the backend server is online and functioning correctly |
 
 ### 部署过程命令
 
@@ -11,11 +20,11 @@ sed -i 's/\r//' start.sh crontab setup_mysql_replication.sh
 
 docker-compose -f docker-compose.nginx.yml up -d
 docker-compose -f docker-compose.redis-mysql.yml up -d
-sh setup_mysql_replication.sh
-
 docker-compose -f docker-compose.web.yml build && docker-compose -f docker-compose.web.yml up -d
 docker-compose -f docker-compose.fetcher.yml build && docker-compose -f docker-compose.fetcher.yml up -d
 docker-compose -f docker-compose.tagger.yml build && docker-compose -f docker-compose.tagger.yml up -d
+sh setup_mysql_replication.sh
+
 
 docker-compose -f docker-compose.web.yml down -v
 docker-compose -f docker-compose.redis-mysql.yml down -v
@@ -28,24 +37,9 @@ docker-compose -f docker-compose.tagger.yml down -v
 
 
 
-#### MYSQL主从配置
-
-```
-```
-
-
-
-
-
-### 启动队列任务
+### EC2 Common Commands
 
 ```shell
-# 启动 fetcher 队列的 worker
-celery -A app.celery worker --loglevel=info -Q fetcher
-
-# 启动 tagger 队列的 worker
-celery -A app.celery worker --loglevel=info -Q tagger
-
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 
@@ -56,9 +50,44 @@ sudo chmod +x /usr/local/bin/docker-compose
 
 docker-compose --version
 
+sudo apt update -y
+sudo apt install unzip curl -y
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
 
-sed -i 's/\r//' start.sh crontab
-docker-compose build && docker-compose up
+
+cd /home/ubuntu
+git clone https://github.com/macoding1994/InfoStream.git
+cd /home/ubuntu/InfoStream
+
+```
+
+
+
+### MYSQL master-slave configuration
+
+```shell
+# master
+[mysqld]
+bind-address = 0.0.0.0
+server-id = 1
+gtid-mode = ON
+enforce-gtid-consistency = ON
+log-bin = mysql-bin
+binlog-format = ROW
+skip-name-resolve
+
+# slave
+[mysqld]
+bind-address = 0.0.0.0
+server-id = 2
+gtid-mode = ON
+enforce-gtid-consistency = ON
+log-bin = mysql-bin
+binlog-format = ROW
+skip-name-resolve
 ```
 
 

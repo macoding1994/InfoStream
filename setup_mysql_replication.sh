@@ -4,7 +4,7 @@ set -e
 # 从环境变量获取配置
 MASTER_CONTAINER="mysql-master"
 SLAVE_CONTAINER="mysql-slave"
-MASTER_IP="172.20.0.10"
+MASTER_IP="172.31.38.247"
 MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD:-"infostream_pass"}
 REPLICA_USER=${MYSQL_USER:-"infostream_user"}
 REPLICA_PASSWORD=${MYSQL_PASSWORD:-"infostream_pass"}
@@ -17,7 +17,7 @@ echo "🔧 开始配置MySQL主从复制..."
 # 1. 检查容器是否运行
 check_container() {
     local container=$1
-    if ! docker ps | grep -q $container; then
+    if ! sudo docker ps | grep -q $container; then
         echo "❌ 容器 $container 未运行!"
         exit 1
     fi
@@ -28,7 +28,7 @@ check_container $SLAVE_CONTAINER
 
 # 2. 在master上创建复制用户
 echo "🔑 在master上创建复制用户..."
-docker exec -i $MASTER_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "
+sudo docker exec -i $MASTER_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "
 CREATE USER IF NOT EXISTS '$REPLICA_USER'@'%' IDENTIFIED BY '$REPLICA_PASSWORD';
 GRANT REPLICATION SLAVE ON *.* TO '$REPLICA_USER'@'%';
 FLUSH PRIVILEGES;
@@ -36,13 +36,13 @@ FLUSH PRIVILEGES;
 
 # 3. 配置GTID复制
 echo "⚙️ 配置GTID复制..."
-docker exec -i $MASTER_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "
+sudo docker exec -i $MASTER_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "
 SET @@GLOBAL.ENFORCE_GTID_CONSISTENCY = ON;
 SET @@GLOBAL.GTID_MODE = ON;
 SET @@GLOBAL.SERVER_ID = 1;
 "
 
-docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "
+sudo docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "
 SET @@GLOBAL.ENFORCE_GTID_CONSISTENCY = ON;
 SET @@GLOBAL.GTID_MODE = ON;
 SET @@GLOBAL.SERVER_ID = 2;
@@ -50,17 +50,17 @@ SET @@GLOBAL.SERVER_ID = 2;
 
 # 4. 重置从库GTID状态
 echo "🔄 重置从库GTID状态..."
-docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "RESET MASTER;"
+sudo docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "RESET MASTER;"
 
 # 5. 初始数据同步
 echo "🔄 执行初始数据同步(使用mysqldump从主库导出数据并导入从库)..."
-docker exec -i $MASTER_CONTAINER mysqldump -uroot -p$MYSQL_ROOT_PASSWORD --single-transaction --master-data=2 $DATABASE | \
-docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD $DATABASE
+sudo docker exec -i $MASTER_CONTAINER mysqldump -uroot -p$MYSQL_ROOT_PASSWORD --single-transaction --master-data=2 $DATABASE | \
+sudo docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD $DATABASE
 
 # 6. 配置slave
 echo "⚙️ 配置slave复制..."
 for ((i=1; i<=$MAX_RETRIES; i++)); do
-    if docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "
+    if sudo docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "
     STOP SLAVE;
     CHANGE MASTER TO
     MASTER_HOST='$MASTER_IP',
@@ -77,7 +77,7 @@ done
 
 # 7. 检查复制状态
 echo "🔍 检查复制状态..."
-slave_status=$(docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "SHOW SLAVE STATUS\G")
+slave_status=$(sudo docker exec -i $SLAVE_CONTAINER mysql -uroot -p$MYSQL_ROOT_PASSWORD -e "SHOW SLAVE STATUS\G")
 
 if echo "$slave_status" | grep -q "Slave_IO_Running: Yes" && \
    echo "$slave_status" | grep -q "Slave_SQL_Running: Yes"; then

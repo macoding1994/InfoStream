@@ -5,7 +5,7 @@ services:
     image: nginx:latest
     container_name: nginx_frontend
     ports:
-      - "180:80"
+      - "80:80"
     volumes:
       - ./frontend:/usr/share/nginx/html
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
