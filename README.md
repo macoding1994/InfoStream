@@ -1,8 +1,30 @@
 # InfoStream
 
+| **Name**                 | **Metric ID** |
+| ------------------------ | ------------- |
+| Koh Cheng Tsuang, Daniel | 22101920      |
+| Pang Teng Xuan           | 24065073      |
+| MA SHANGJU               | 23110836      |
+
 ### Feed-Fetcher Service
 
+The Feed Fetcher is a Celery background task that automatically **retrieves articles from a set of predefined RSS/Atom feeds**.
+
+- It parses the feed entries from multiple feed URLs (defined in `FEED_DICT`).
+- For each article, it extracts the URL, title, and description.
+- The article data is stored in the `feeds` table of the database.
+- If the feed URL is mapped to a feed class (category), this information is also stored as a keyword.
+
 ### Processing Service
+
+This Celery task is used to **automatically tag unprocessed feed articles** with keywords.
+
+- It queries the database for feeds that are not yet tagged (`is_tagged = 0`).
+- For each untagged feed, it calls the **DeepSeek API** to extract relevant keywords from the feed URL.
+- It inserts these keywords into the `keyword` table.
+- Finally, it marks the feed as `is_tagged = 1` to indicate it has been processed.
+
+This task helps keep your feed database **enriched with meaningful tags** so that front-end applications can show categorized or searchable feed content.
 
 ### API Service
 
@@ -13,10 +35,31 @@
 | `/trigger_tag`             | POST   | Trigger background task to extract keywords for untagged feeds and store them |
 | `/test_backend`            | GET    | Test whether the backend server is online and functioning correctly |
 
-### 部署过程命令
+### Elastic Load Balancer（ALB）
+
+An **Application Load Balancer (ALB)** named **InfoStream** was created on AWS to distribute incoming traffic.
+ The load balancer’s DNS is:
+ `InfoStream-124212143.us-east-1.elb.amazonaws.com`.
+
+A **target group** was configured to forward traffic on **port 80** to two EC2 instances:
+ **InfoStream-frontend1** and **InfoStream-frontend**.
+
+This setup ensures that HTTP requests are balanced across the frontend services, providing better availability and scalability for the application.
+
+### S3
+
+An **automated log archival workflow** was implemented using Amazon S3.
+ A **shell script** was scheduled via **cron** to periodically upload Docker container logs to an S3 bucket named **`cloud-sec-msj`**.
+
+The EC2 instance was assigned the **`EMR_EC2_DefaultRole`** IAM role, providing the necessary permissions to upload logs to S3 securely, without hardcoding AWS credentials.
+
+This solution ensures that container logs are reliably archived in S3, supporting future monitoring, troubleshooting, and compliance requirements.
+
+
+
+### Commands
 
 ```shell
-sed -i 's/\r//' start.sh crontab setup_mysql_replication.sh
 
 docker-compose -f docker-compose.nginx.yml up -d
 docker-compose -f docker-compose.redis-mysql.yml up -d
@@ -61,6 +104,7 @@ aws --version
 cd /home/ubuntu
 git clone https://github.com/macoding1994/InfoStream.git
 cd /home/ubuntu/InfoStream
+sudo docker-compose -f docker-compose.nginx.yml up -d
 
 ```
 
@@ -90,16 +134,3 @@ binlog-format = ROW
 skip-name-resolve
 ```
 
-
-
-
-| 项目         | Application Load Balancer (ALB)          | Network Load Balancer (NLB)           |
-| ------------ | ---------------------------------------- | ------------------------------------- |
-| 主要用途     | 应用层（第7层，HTTP/HTTPS）负载均衡      | 网络层（第4层，TCP/UDP）负载均衡      |
-| 适合场景     | 网站、API服务器，按URL、域名分流         | 高性能 TCP 流量（游戏、视频、数据库） |
-| 转发能力     | 可以根据 URL 路由规则、Host 头、路径转发 | 只做 TCP/UDP 连接转发，不看上层协议   |
-| 延迟         | 稍高（有 HTTP 处理）                     | 极低（直通 TCP）                      |
-| 监控         | 支持 HTTP 状态码健康检查                 | 支持 TCP 端口健康检查                 |
-| 静态 IP 支持 | 否，ALB 会动态分配 IP                    | 是，NLB 支持固定 IP                   |
-| HTTPS 终止   | 支持，ALB 可以直接做 SSL/TLS 终止        | 通常不处理 SSL/TLS，直接转发到后端    |
-| 价格         | 一般比 NLB 稍贵                          | 比 ALB 更便宜些，特别适合高频 TCP     |
