@@ -70,13 +70,9 @@ def tag_unprocessed_feeds():
         logger.info("✅ 没有未处理的 feeds")
         return {"result": 0, "status": "No untagged feeds"}
 
-    insert_keyword_query = """
-        INSERT INTO keyword (feed_id, keyword, created_at, updated_at)
-        VALUES (%s, %s, %s, %s)
-    """
 
     update_feed_tagged_query = "UPDATE feeds SET is_tagged = 1 WHERE id = %s"
-
+    db = DatabaseManager(use_slave=False)
     tagged_count = 0
     for feed in feeds:
         feed_id = feed['id']

@@ -75,6 +75,8 @@ docker-compose -f docker-compose.nginx.yml down -v
 docker-compose -f docker-compose.fetcher.yml down -v
 docker-compose -f docker-compose.tagger.yml down -v
 
+sudo find /var/lib/docker/containers/ -name '*-json.log' -exec truncate -s 0 {} \;
+
 
 ```
 
