@@ -1,11 +1,7 @@
 import os
 import socket
-import time
-from datetime import datetime
-import jieba.analyse
 from loguru import logger
-import feedparser
-from flask import Flask, request, render_template, redirect, url_for, jsonify
+from flask import Flask, request, jsonify
 from celery import Celery
 from db_manager import DatabaseManager, initialize_database
 from tool import get_feed_entry, insert_feed, insert_keyword, get_keywords_from_deepseek
@@ -38,17 +34,21 @@ FEED_DICT = {
 def get_feed_info(feed_dict=None):
     all_entries = []
     if isinstance(feed_dict, dict):
+        logger.info(f"Updating FEED_DICT with: {feed_dict}")
         FEED_DICT.update(feed_dict)
 
     for feed_url, fclass in FEED_DICT.items():
+        logger.info(f"Fetching feed: {feed_url} with class: {fclass}")
         for entry in get_feed_entry(feed_url):
             url = entry.get('url', '') or entry.get('link', '')
             title = entry.get('title', '')
             description = entry.get('description', '')
             feed_id = insert_feed(url, title, description)
             if feed_id:
+                logger.info(f"Inserted feed: {feed_id} - {title}")
                 for feed_class in fclass.split('/'):
                     insert_keyword(feed_id, feed_class)
+                    logger.info(f"Inserted keyword '{feed_class}' for feed {feed_id}")
 
     return {
         'current': len(all_entries),
@@ -62,36 +62,39 @@ def get_feed_info(feed_dict=None):
 def tag_unprocessed_feeds():
     db = DatabaseManager()
 
-    # 查询未打标签的 feeds
+    # Query feeds that are not tagged yet
     query = "SELECT id, url FROM feeds WHERE is_tagged = 0 LIMIT 50"
     feeds = db.execute_query(query, fetch=True)
 
     if not feeds:
-        logger.info("✅ 没有未处理的 feeds")
+        logger.info("✅ No untagged feeds found.")
         return {"result": 0, "status": "No untagged feeds"}
 
-
-    update_feed_tagged_query = "UPDATE feeds SET is_tagged = 1 WHERE id = %s"
-    db = DatabaseManager(use_slave=False)
     tagged_count = 0
     for feed in feeds:
         feed_id = feed['id']
         url = feed['url']
+        logger.info(f"Processing Feed ID {feed_id}, URL: {url}")
+
         keywords = get_keywords_from_deepseek(url)
-        logger.info(f"🔖 为 Feed ID {feed_id} 提取关键词: {keywords}")
+        logger.info(f"🔖 Extracted keywords for Feed ID {feed_id}: {keywords}")
+
         for kw in keywords:
             try:
                 insert_keyword(feed_id, kw)
-                logger.info(f"✅ 插入关键词 '{kw}' 到 feed {feed_id}")
+                logger.info(f"✅ Inserted keyword '{kw}' for feed {feed_id}")
             except Exception as e:
-                logger.warning(f"❌ 插入失败（Feed ID {feed_id} / 关键词：{kw}）：{e}")
+                logger.warning(f"❌ Failed to insert keyword (Feed ID {feed_id} / Keyword: {kw}): {e}")
 
         try:
-            db.execute_query(update_feed_tagged_query, (feed_id,))
+            update_feed_tagged_query = "UPDATE feeds SET is_tagged = 1 WHERE id = %s"
+            DatabaseManager(use_slave=False).execute_query(update_feed_tagged_query, (feed_id,))
             tagged_count += 1
+            logger.info(f"✅ Marked feed {feed_id} as tagged.")
         except Exception as e:
-            logger.warning(f"⚠️ 标记 feed {feed_id} 已打标签失败：{e}")
-    logger.info(f"🎉 共处理并打标签 {tagged_count} 条 feed")
+            logger.warning(f"⚠️ Failed to mark feed {feed_id} as tagged: {e}")
+
+    logger.info(f"🎉 Finished tagging {tagged_count} feed(s).")
     return {"result": tagged_count, "status": "Completed"}
 
 
@@ -101,12 +104,10 @@ def tag_unprocessed_feeds():
 def get_feeds_with_keywords():
     db = DatabaseManager(use_slave=True)
 
-    # 获取分页参数
+    # Get pagination parameters
     try:
         page = int(request.args.get('page', 1))
         page_size = int(request.args.get('page_size', 10))
-        # page = 1
-        # page_size = 10
         if page < 1 or page_size < 1:
             raise ValueError()
     except ValueError:
@@ -114,7 +115,7 @@ def get_feeds_with_keywords():
 
     offset = (page - 1) * page_size
 
-    # 正确分页 feeds（只查主表）
+    # Query paginated feeds (from master only)
     feed_query = """
         SELECT id, url, title, description, is_tagged
         FROM feeds
@@ -132,24 +133,24 @@ def get_feeds_with_keywords():
             'feeds': []
         })
 
-    # 收集所有 feed_id 进行关键词查表
+    # Collect feed_ids for keyword lookup
     feed_ids = [feed['id'] for feed in feeds]
     keyword_query = """
         SELECT feed_id, keyword FROM keyword WHERE feed_id IN %s
     """
     keyword_rows = db.execute_query(keyword_query, (feed_ids,), fetch=True)
 
-    # 构建关键词映射
+    # Build keyword mapping
     keyword_map = {}
     for row in keyword_rows:
         keyword_map.setdefault(row['feed_id'], []).append(row['keyword'])
 
-    # 把 keyword 附加回 feed 数据
+    # Attach keywords to feed data
     for feed in feeds:
         feed['is_tagged'] = bool(feed['is_tagged'])
         feed['keywords'] = keyword_map.get(feed['id'], [])
 
-    # 总数量
+    # Get total count
     total = db.execute_query("SELECT COUNT(*) AS total FROM feeds", fetch=True)[0]['total']
 
     return jsonify({
@@ -163,12 +164,14 @@ def get_feeds_with_keywords():
 
 @app.route('/trigger_fetch', methods=['POST'])
 def trigger_fetch():
+    logger.info("Triggering get_feed_info task.")
     get_feed_info.apply_async()
     return 'Fetch task triggered', 200
 
 
 @app.route('/trigger_tag', methods=['POST'])
 def trigger_tag():
+    logger.info("Triggering tag_unprocessed_feeds task.")
     tag_unprocessed_feeds.apply_async()
     return 'Tag task triggered', 200
 
@@ -184,17 +187,7 @@ def test_backend():
 
 
 if __name__ == '__main__':
-    # get_feeds_with_keywords()
+    logger.info("Initializing database.")
     initialize_database()
+    logger.info("Starting Flask app.")
     app.run(debug=True, host="0.0.0.0")
-
-    # task = get_feed_info.apply_async()
-    # get_feed_info.apply_async(kwargs={
-    #     "feed_dict": {
-    #         "https://ciechanow.ski/atom.xml": "technology",
-    #         "https://tatianamac.com/feed/feed.xml": "technology"
-    #     }
-    # })
-    # print(task.id)  # 可用于查看状态
-    # task = tag_unprocessed_feeds.apply_async()
-    # print(task.id)  # 可用于查看状态
